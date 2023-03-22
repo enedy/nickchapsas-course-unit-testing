@@ -8,6 +8,7 @@ namespace CalculatorLibrary.Tests.Unit;
 public class CalculatorTests : IAsyncLifetime //IDisposable 
 {
     // Arrange
+    // System Under Test - System that is being tested for tests
     private readonly Calculator _sut = new();
     private readonly ITestOutputHelper _outputHelper;
 
