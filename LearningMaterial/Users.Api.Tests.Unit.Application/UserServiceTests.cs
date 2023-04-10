@@ -2,9 +2,11 @@
 using System.Linq;
 using System.Threading.Tasks;
 using FluentAssertions;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Data.Sqlite;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
+using NSubstitute.ReturnsExtensions;
 using Users.Api.Logging;
 using Users.Api.Models;
 using Users.Api.Repositories;
@@ -92,20 +94,19 @@ public class UserServiceTests
     }
 
     [Fact]
-    public async Task GetByIdAsync_ShouldReturnAUser_WhenAUserExists()
+    public async Task GetByIdAsync_ShouldReturnAUser_WhenUserExists()
     {
         // Arrange
-        var id = Guid.NewGuid();
         var user = new User
         {
-            Id = id,
+            Id = Guid.NewGuid(),
             FullName = "Enedy Cordeiro"
         };
 
-        _userRepository.GetByIdAsync(id).Returns(user);
+        _userRepository.GetByIdAsync(user.Id).Returns(user);
 
         // Act
-        var result = await _sut.GetByIdAsync(id);
+        var result = await _sut.GetByIdAsync(user.Id);
 
         // Assert
         result.Should().BeEquivalentTo(user);
@@ -115,54 +116,42 @@ public class UserServiceTests
     public async Task GetByIdAsync_ShouldReturnNull_WhenAUserDoesntExists()
     {
         // Arrange
-        var id = Guid.NewGuid();
-
-        User? user = null;
-        _userRepository.GetByIdAsync(id).Returns(user);
+        _userRepository.GetByIdAsync(Arg.Any<Guid>()).ReturnsNull();
 
         // Act
-        var result = await _sut.GetByIdAsync(id);
+        var result = await _sut.GetByIdAsync(Guid.NewGuid());
 
         // Assert
-        result.Should().BeEquivalentTo(user);
+        result.Should().BeNull();
     }
 
     [Fact]
     public async Task GetByIdAsync_ShouldLogCorrectMessages_WhenRetrievingTheUsers()
     {
         // Arrange
-        var id = Guid.NewGuid();
+        var userId = Guid.NewGuid();
 
-        var user = new User
-        {
-            Id = id,
-            FullName = "Enedy Cordeiro"
-        };
-        var users = new[]
-        {
-            user
-        };
-
-        _userRepository.GetAllAsync().Returns(users);
+        _userRepository.GetByIdAsync(userId).ReturnsNull();
 
         // Act
-        await _sut.GetAllAsync();
+        await _sut.GetByIdAsync(userId);
 
         // Assert
-        _logger.Received(1).LogInformation(Arg.Is("Retrieving all users"));
-        _logger.Received(1).LogInformation(Arg.Is("All users retrieved in {0}ms"), Arg.Any<long>());
+        _logger.Received(1).LogInformation(Arg.Is("Retrieving user with id: {0}"));
+        _logger.Received(1).LogInformation(Arg.Is("User with id {0} retrieved in {1}ms"), Arg.Is(userId), Arg.Any<long>());
     }
 
     [Fact]
     public async Task GetByIdAsync_ShouldLogCorrectMessages_WhenAExceptionIsThrown()
     {
         // Arrange
+        var userId = Guid.NewGuid();
         var sqliteException = new SqliteException("Something went wrong", 500);
-        _userRepository.GetAllAsync()
+        _userRepository.GetByIdAsync(Arg.Any<Guid>())
                        .Throws(sqliteException);
 
         // Act
-        var requestAction = async () => await _sut.GetAllAsync();
+        var requestAction = async () => await _sut.GetByIdAsync(userId);
 
         // Assert
         await requestAction
@@ -170,12 +159,12 @@ public class UserServiceTests
                         .ThrowAsync<SqliteException>()
                         .WithMessage("Something went wrong");
 
-        _logger.Received(1).LogInformation(Arg.Is("Retrieving all users"));
-        _logger.Received(1).LogError(Arg.Is(sqliteException), Arg.Is("Something went wrong while retrieving all users"));
+        _logger.Received(1).LogError(Arg.Is(sqliteException), Arg.Is("Something went wrong while retrieving user with id {0}"), Arg.Is(userId));
+        _logger.Received(1).LogInformation(Arg.Is("User with id {0} retrieved in {1}ms"), Arg.Is(userId), Arg.Any<long>());
     }
 
     [Fact]
-    public async Task CreateAsync_ShouldCreateAUser_WhenAUserCreateDetailsAreValid()
+    public async Task CreateAsync_ShouldCreateAUser_WhenDetailsAreValid()
     {
         //  Arrange
         var user = new User
@@ -189,7 +178,7 @@ public class UserServiceTests
         var result = await _sut.CreateAsync(user);
 
         // Assert
-        result.Should().Be(true);
+        result.Should().BeTrue();
     }
 
     [Fact]
@@ -206,7 +195,7 @@ public class UserServiceTests
         // Act
         var result = await _sut.CreateAsync(user);
 
-        result.Should().Be(true);
+        result.Should().BeTrue();
 
         // Assert
         _logger.Received(1).LogInformation(Arg.Is("Creating user with id {0} and name: {1}"), Arg.Is(user.Id), Arg.Is(user.FullName));
@@ -237,7 +226,7 @@ public class UserServiceTests
     }
 
     [Fact]
-    public async Task DeleteByIdAsync_ShouldDeleteAUser_WhenTheUserExists()
+    public async Task DeleteByIdAsync_ShouldDeleteAUser_WhenUserExists()
     {
         // Arrange
         var id = Guid.NewGuid();
@@ -247,11 +236,11 @@ public class UserServiceTests
         var result = await _sut.DeleteByIdAsync(id);
 
         // Assert
-        result.Should().Be(true);
+        result.Should().BeTrue();
     }
 
     [Fact]
-    public async Task DeleteByIdAsync_ShouldNotDeleteAUser_WhenTheUserDoesntExists()
+    public async Task DeleteByIdAsync_ShouldNotDeleteAUser_WhenUserDoesntExists()
     {
         // Arrange
         var id = Guid.NewGuid();
@@ -261,11 +250,11 @@ public class UserServiceTests
         var result = await _sut.DeleteByIdAsync(id);
 
         // Assert
-        result.Should().Be(false);
+        result.Should().BeFalse();
     }
 
     [Fact]
-    public async Task DeleteByIdAsync_ShouldLogCorrectMessages_WhenDeletingAUser()
+    public async Task DeleteByIdAsync_ShouldLogCorrectMessages_WhenInvoked()
     {
         // Arrange
         var id = Guid.NewGuid();
